@@ -59,10 +59,12 @@
 #include "stm32f429i_discovery_lcd.h"
 
 #include "lcd_log.h"
+#include "cpu_utils.h"
 /* USER CODE END Includes */
 
 /* Variables -----------------------------------------------------------------*/
-osThreadId defaultTaskHandle;
+osThreadId adcTaskHandle;
+osThreadId btnTaskHandle;
 
 /* USER CODE BEGIN Variables */
 extern RTC_HandleTypeDef hrtc;
@@ -71,7 +73,8 @@ extern ADC_HandleTypeDef hadc1;
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
-void StartDefaultTask(void const * argument);
+void StartADCTask(void const * argument);
+void StartBTNTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -116,12 +119,13 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  /* definition and creation of ADC */
+  osThreadDef(ADC, StartADCTask, osPriorityNormal, 0, 128);
+  adcTaskHandle = osThreadCreate(osThread(ADC), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  osThreadDef(BTN, StartBTNTask, osPriorityBelowNormal, 0, 128);
+  btnTaskHandle = osThreadCreate(osThread(BTN), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -129,11 +133,10 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 }
 
-/* StartDefaultTask function */
-void StartDefaultTask(void const * argument)
+/* StartADCTask function */
+void StartADCTask(void const * argument)
 {
-
-  /* USER CODE BEGIN StartDefaultTask */
+  /* USER CODE BEGIN StartADCTask */
   RTC_TimeTypeDef time;
   RTC_DateTypeDef date;
   char *weekDays[] = {"TMP","Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
@@ -205,14 +208,67 @@ void StartDefaultTask(void const * argument)
     
     strcat(sToUART,"\r");
     BSP_COM_Transmit(COM1, sToUART);
-    
-    osThreadSuspend(defaultTaskHandle);
   }
-  /* USER CODE END StartDefaultTask */
+  /* USER CODE END StartADCTask */
 }
 
 /* USER CODE BEGIN Application */
-     //osThreadSuspend(defaultTaskHandle);
+void StartBTNTask(void const * argument)
+{
+  uint32_t tikcs;
+  char sFooter[30] = "Press BTN to pause | Load 00%";
+
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(50);
+    
+    if (BSP_PB_GetState(BUTTON_KEY) == SET) {
+      // w8 
+      tikcs = 0;
+      while (BSP_PB_GetState(BUTTON_KEY) == SET && tikcs <= 50) {
+        osDelay(10);
+        tikcs++;        
+      }
+      
+      // simple press (less then 500 ms)
+      if (tikcs < 50) {
+        LCD_UsrLog("USER BTN: simple press\n");
+        
+        osThreadSuspend(adcTaskHandle);
+      } else {
+        // long press
+        // ...
+        LCD_UsrLog("USER BTN: long press\n");
+        osThreadResume(adcTaskHandle);
+        
+        // w8 when button relesed
+        while (BSP_PB_GetState(BUTTON_KEY) == SET) {
+          osDelay(10);
+        } osDelay(100);
+      }
+    }
+    
+    sprintf(sFooter,"Press BTN to pause | Load %02u%", osGetCPUUsage());
+    sFooter[29] = 0;
+    LCD_LOG_SetFooter((uint8_t *)sFooter);
+  }
+  /* USER CODE END StartADCTask */
+}
+
+/**
+  * @brief  EXTI line detection callbacks.
+  * @param  GPIO_Pin: Specifies the pins connected EXTI line
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+ if (GPIO_Pin == KEY_BUTTON_PIN)
+ {
+   ;
+ }
+}
+
 /* USER CODE END Application */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

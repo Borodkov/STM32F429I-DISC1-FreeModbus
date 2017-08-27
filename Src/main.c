@@ -124,26 +124,6 @@ int main(void)
   /* Set the LCD Text Color */
   BSP_LCD_SetTextColor(LCD_COLOR_DARKBLUE);  
   
-  /* Display LCD messages */
-  BSP_LCD_DisplayStringAt(0, 10, (uint8_t*)"STM32F429I BSP", CENTER_MODE);
-  BSP_LCD_SetFont(&Font16);
-  BSP_LCD_DisplayStringAt(0, 35, (uint8_t*)"Drivers examples", CENTER_MODE);
-  
-  /* Draw Bitmap */
-//  BSP_LCD_DrawBitmap((BSP_LCD_GetXSize() - 80)/2, 65, (uint8_t *)stlogo);
-  
-  BSP_LCD_SetFont(&Font8);
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()- 20, (uint8_t*)"Copyright (c) STMicroelectronics 2017", CENTER_MODE);
-  
-  BSP_LCD_SetFont(&Font12);
-  BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
-  BSP_LCD_FillRect(0, BSP_LCD_GetYSize()/2 + 15, BSP_LCD_GetXSize(), 60);
-  BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-  BSP_LCD_SetBackColor(LCD_COLOR_BLUE); 
-  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 + 30, (uint8_t*)"Press USER Button to start:", CENTER_MODE);
-//  sprintf((char *)desc,"%s example", BSP_examples[DemoIndex].DemoName);
-//  BSP_LCD_DisplayStringAt(0, BSP_LCD_GetYSize()/2 + 45, (uint8_t *)desc, CENTER_MODE);   
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -157,7 +137,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LCD_LOG_Init();
   LCD_LOG_SetHeader("FreeRTOS+FreeModbus");
-  LCD_LOG_SetFooter("Press User BTN to pause");
+  LCD_LOG_SetFooter("Press BTN to pause | Load 00%");
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */

@@ -23,9 +23,9 @@ param([String]$debugfile = "");
 
 if ($debugfile -eq "")
 {
-& "C:\Program Files (x86)\IAR Systems ARM\Embedded Workbench 8.0\common\bin\cspybat" -f "D:\_Projects.Study\STM32\F4\HomeWork\EWARM\settings\HomeWork.HomeWork.general.xcl" --backend -f "D:\_Projects.Study\STM32\F4\HomeWork\EWARM\settings\HomeWork.HomeWork.driver.xcl" 
+& "C:\Program Files (x86)\IAR Systems\Embedded Workbench 8.0\common\bin\cspybat" -f "C:\Users\lvp\Documents\GitHub\STM32F429I-DISC1-FreeModbus\EWARM\settings\HomeWork.HomeWork.general.xcl" --backend -f "C:\Users\lvp\Documents\GitHub\STM32F429I-DISC1-FreeModbus\EWARM\settings\HomeWork.HomeWork.driver.xcl" 
 }
 else
 {
-& "C:\Program Files (x86)\IAR Systems ARM\Embedded Workbench 8.0\common\bin\cspybat" -f "D:\_Projects.Study\STM32\F4\HomeWork\EWARM\settings\HomeWork.HomeWork.general.xcl" --debug_file=$debugfile --backend -f "D:\_Projects.Study\STM32\F4\HomeWork\EWARM\settings\HomeWork.HomeWork.driver.xcl" 
+& "C:\Program Files (x86)\IAR Systems\Embedded Workbench 8.0\common\bin\cspybat" -f "C:\Users\lvp\Documents\GitHub\STM32F429I-DISC1-FreeModbus\EWARM\settings\HomeWork.HomeWork.general.xcl" --debug_file=$debugfile --backend -f "C:\Users\lvp\Documents\GitHub\STM32F429I-DISC1-FreeModbus\EWARM\settings\HomeWork.HomeWork.driver.xcl" 
 }

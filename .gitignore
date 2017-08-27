@@ -1,0 +1,5 @@
+*.o
+*.xcl
+*.pbi
+*.tmp
+*.pbd
