@@ -308,6 +308,19 @@ uint32_t BSP_PB_GetState(Button_TypeDef Button)
 }
 
 /**
+  * @brief  EXTI line detection callbacks.
+  * @param  GPIO_Pin: Specifies the pins connected EXTI line
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+ if (GPIO_Pin == KEY_BUTTON_PIN)
+ {
+   ;
+ }
+}
+
+/**
   * @brief  Configures COM port.
   * @param  COM: COM port to be configured.
   *          This parameter can be one of the following values:
@@ -352,6 +365,10 @@ void BSP_COM_Init(COM_TypeDef COM)
   huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart1.Init.OverSampling = UART_OVERSAMPLING_16;
   HAL_UART_Init(&huart1);
+  
+  /* Peripheral interrupt init */
+  HAL_NVIC_SetPriority(USART1_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(USART1_IRQn);
 }
 
 /**

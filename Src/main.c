@@ -137,7 +137,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LCD_LOG_Init();
   LCD_LOG_SetHeader("FreeRTOS+FreeModbus");
-  LCD_LOG_SetFooter("Press BTN to pause | Load 00%");
+  LCD_LOG_SetFooter("Press BTN to switch | Load 00%");
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */

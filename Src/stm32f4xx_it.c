@@ -38,6 +38,7 @@
 
 /* USER CODE BEGIN 0 */
 #include "stm32f429i_discovery.h"
+#include "port.h"
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -45,6 +46,7 @@ extern DMA_HandleTypeDef hdma_adc1;
 extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart1;
 
 /******************************************************************************/
 /*            Cortex-M4 Processor Interruption and Exception Handlers         */ 
@@ -191,20 +193,6 @@ void TIM2_IRQHandler(void)
 }
 
 /**
-* @brief This function handles TIM6 global interrupt, DAC1 and DAC2 underrun error interrupts.
-*/
-void TIM6_DAC_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM6_DAC_IRQn 0 */
-
-  /* USER CODE END TIM6_DAC_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim6);
-  /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
-
-  /* USER CODE END TIM6_DAC_IRQn 1 */
-}
-
-/**
 * @brief This function handles DMA2 stream0 global interrupt.
 */
 void DMA2_Stream0_IRQHandler(void)
@@ -227,6 +215,11 @@ void DMA2_Stream0_IRQHandler(void)
 void EXTI0_IRQHandler(void)
 {
   HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
+}
+
+void USART1_IRQHandler(void)
+{
+  MODBUS_UART_IRQHandler(&huart1);
 }
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

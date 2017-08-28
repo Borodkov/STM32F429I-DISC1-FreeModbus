@@ -65,16 +65,22 @@
 /* Variables -----------------------------------------------------------------*/
 osThreadId adcTaskHandle;
 osThreadId btnTaskHandle;
+osThreadId uartTaskHandle;
+osThreadId modbusTaskHandle;
 
 /* USER CODE BEGIN Variables */
 extern RTC_HandleTypeDef hrtc;
 extern TIM_HandleTypeDef htim2;
 extern ADC_HandleTypeDef hadc1;
+
+char sDateTemp[40] = {0};
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
 void StartADCTask(void const * argument);
 void StartBTNTask(void const * argument);
+void StartUartTask(void const * argument);
+void StartModBusTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -124,8 +130,15 @@ void MX_FREERTOS_Init(void) {
   adcTaskHandle = osThreadCreate(osThread(ADC), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  osThreadDef(BTN, StartBTNTask, osPriorityBelowNormal, 0, 128);
+  osThreadDef(BTN, StartBTNTask, osPriorityLow, 0, 128);
   btnTaskHandle = osThreadCreate(osThread(BTN), NULL);
+  
+  osThreadDef(UART, StartUartTask, osPriorityBelowNormal, 0, 128);
+  uartTaskHandle = osThreadCreate(osThread(UART), NULL);
+  
+  osThreadDef(MODBUS, StartModBusTask, osPriorityHigh, 0, 512);
+  modbusTaskHandle = osThreadCreate(osThread(MODBUS), NULL);
+  osThreadSuspend(modbusTaskHandle);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -140,7 +153,6 @@ void StartADCTask(void const * argument)
   RTC_TimeTypeDef time;
   RTC_DateTypeDef date;
   char *weekDays[] = {"TMP","Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
-  char sToUART[40] = {0};
   
   #define  ADC_WINDOW  8
   uint16_t adcBuf[ADC_WINDOW];
@@ -195,7 +207,7 @@ void StartADCTask(void const * argument)
     /***************************************************************************
     Display the Temperature Value on the LCD 
     ***************************************************************************/
-    sprintf(sToUART, "%s 20%02u/%02u/%02u %02u:%02u:%02u %+.1f [C]\n", 
+    sprintf(sDateTemp, "%s 20%02u/%02u/%02u %02u:%02u:%02u %+.1f [C]\n", 
             weekDays[date.WeekDay],
             date.Year,
             date.Month,
@@ -204,10 +216,7 @@ void StartADCTask(void const * argument)
             time.Minutes,
             time.Seconds,
             t);
-    LCD_UsrLog(sToUART);
-    
-    strcat(sToUART,"\r");
-    BSP_COM_Transmit(COM1, sToUART);
+    LCD_UsrLog(sDateTemp);
   }
   /* USER CODE END StartADCTask */
 }
@@ -216,7 +225,7 @@ void StartADCTask(void const * argument)
 void StartBTNTask(void const * argument)
 {
   uint32_t tikcs;
-  char sFooter[30] = "Press BTN to pause | Load 00%";
+  char sFooter[31] = "Press BTN to switch | Load 00%";
 
   /* Infinite loop */
   for(;;)
@@ -233,14 +242,19 @@ void StartBTNTask(void const * argument)
       
       // simple press (less then 500 ms)
       if (tikcs < 50) {
-        LCD_UsrLog("USER BTN: simple press\n");
+        LCD_DbgLog("USER BTN: simple press\n");
+        LCD_DbgLog("*!* ModBus Mode *!*\n");
         
-        osThreadSuspend(adcTaskHandle);
+        osThreadSuspend(uartTaskHandle);
+        osThreadResume(modbusTaskHandle);
       } else {
         // long press
         // ...
         LCD_UsrLog("USER BTN: long press\n");
-        osThreadResume(adcTaskHandle);
+        LCD_DbgLog("*!* UART Mode *!*\n");
+        
+        osThreadSuspend(modbusTaskHandle);
+        osThreadResume(uartTaskHandle);
         
         // w8 when button relesed
         while (BSP_PB_GetState(BUTTON_KEY) == SET) {
@@ -249,24 +263,136 @@ void StartBTNTask(void const * argument)
       }
     }
     
-    sprintf(sFooter,"Press BTN to pause | Load %02u%", osGetCPUUsage());
-    sFooter[29] = 0;
+    sprintf(sFooter,"Press BTN to switch | Load %02u%", osGetCPUUsage());
+    sFooter[30] = 0;
     LCD_LOG_SetFooter((uint8_t *)sFooter);
   }
   /* USER CODE END StartADCTask */
 }
 
-/**
-  * @brief  EXTI line detection callbacks.
-  * @param  GPIO_Pin: Specifies the pins connected EXTI line
-  * @retval None
-  */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void StartUartTask(void const * argument)
 {
- if (GPIO_Pin == KEY_BUTTON_PIN)
- {
-   ;
- }
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1000);
+    
+    strcat(sDateTemp,"\r");
+    BSP_COM_Transmit(COM1, sDateTemp);
+  }
+  /* USER CODE END StartADCTask */
+}
+
+/* ----------------------- Platform includes --------------------------------*/
+#include "port.h"
+
+/* ----------------------- Modbus includes ----------------------------------*/
+#include "mb.h"
+
+/* ----------------------- Defines ------------------------------------------*/
+#define REG_INPUT_START   1000
+#define REG_INPUT_NREGS   4
+#define REG_HOLDING_START 1
+#define REG_HOLDING_NREGS 40
+
+/* ----------------------- Static variables ---------------------------------*/
+static USHORT   usRegInputBuf[REG_INPUT_NREGS];
+static USHORT   usRegHoldingStart = REG_HOLDING_START;
+static USHORT   usRegHoldingBuf[REG_HOLDING_NREGS];
+
+void StartModBusTask(void const * argument)
+{
+  eMBErrorCode eStatus;
+  
+  portTickType xLastWakeTime;
+
+  /* Select either ASCII or RTU Mode. */
+  eStatus = eMBInit( MB_RTU, 0x01, 0, 115200, MB_PAR_NONE );
+
+  /* Enable the Modbus Protocol Stack. */
+  eStatus = eMBEnable();
+  
+  /* Infinite loop */
+  for( ;; )
+  {
+    /* Call the main polling loop of the Modbus protocol stack. */
+    ( void )eMBPoll(  );
+    /* Application specific actions. Count the number of poll cycles. */
+    usRegInputBuf[0]++;
+    /* Hold the current FreeRTOS ticks. */
+    xLastWakeTime = xTaskGetTickCount(  );
+    usRegInputBuf[1] = ( unsigned portSHORT )( xLastWakeTime >> 16UL );
+    usRegInputBuf[2] = ( unsigned portSHORT )( xLastWakeTime & 0xFFFFUL );
+    /* The constant value. */
+    usRegInputBuf[3] = 33;
+    
+    osDelay(20);
+  }
+}
+
+eMBErrorCode
+eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs, eMBRegisterMode eMode )
+{
+  eMBErrorCode    eStatus = MB_ENOERR;
+  int             iRegIndex;
+
+  if( ( usAddress >= REG_HOLDING_START ) &&
+      ( usAddress + usNRegs <= REG_HOLDING_START + REG_HOLDING_NREGS ) )
+  {
+    iRegIndex = ( int )( usAddress - usRegHoldingStart );
+    switch ( eMode )
+    {
+    /* Pass current register values to the protocol stack. */
+    case MB_REG_READ:
+      // copy string with RTC and Temperature to the holding buf
+      memcpy(usRegHoldingBuf, sDateTemp, REG_HOLDING_NREGS);
+      
+      while( usNRegs > 0 )
+      {
+        *pucRegBuffer++ = ( unsigned char )( sDateTemp[iRegIndex++]);
+        *pucRegBuffer++ = ( unsigned char )( sDateTemp[iRegIndex++]);
+//        *pucRegBuffer++ = ( unsigned char )( usRegHoldingBuf[iRegIndex] >> 8 );
+//        *pucRegBuffer++ = ( unsigned char )( usRegHoldingBuf[iRegIndex] & 0xFF );
+//        iRegIndex++;
+        usNRegs--;
+      }
+      break;
+
+    /* Update current register values with new values from the protocol stack. */
+    case MB_REG_WRITE:
+      while( usNRegs > 0 )
+      {
+        usRegHoldingBuf[iRegIndex] = *pucRegBuffer++ << 8;
+        usRegHoldingBuf[iRegIndex] |= *pucRegBuffer++;
+        iRegIndex++;
+        usNRegs--;
+      }
+    }
+  }
+  else
+  {
+    eStatus = MB_ENOREG;
+  }
+  
+  return eStatus;
+}
+
+eMBErrorCode
+eMBRegInputCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs )
+{
+    return MB_ENOREG;
+}
+
+eMBErrorCode
+eMBRegCoilsCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNCoils, eMBRegisterMode eMode )
+{
+    return MB_ENOREG;
+}
+
+eMBErrorCode
+eMBRegDiscreteCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNDiscrete )
+{
+    return MB_ENOREG;
 }
 
 /* USER CODE END Application */

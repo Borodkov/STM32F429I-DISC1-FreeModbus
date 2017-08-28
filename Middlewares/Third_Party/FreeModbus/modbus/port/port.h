@@ -2,8 +2,7 @@
 #define _PORT_H
 
 /* ----------------------- Platform includes --------------------------------*/
-
-#include "stm32f4xx_hal.h"
+#include "stm32f429i_discovery.h"
 
 /* ----------------------- Defines ------------------------------------------*/
 #define	INLINE
@@ -14,6 +13,7 @@
 #define EXIT_CRITICAL_SECTION( )    __enable_irq()
 #define assert( expr )
 
+void MODBUS_UART_IRQHandler(UART_HandleTypeDef *huart);
 
 typedef char            BOOL;
 typedef unsigned char  UCHAR;
