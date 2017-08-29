@@ -3,3 +3,5 @@
 *.pbi
 *.tmp
 *.pbd
+*.dbgdt
+*.dnx

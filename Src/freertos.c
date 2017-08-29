@@ -81,6 +81,7 @@ void StartADCTask(void const * argument);
 void StartBTNTask(void const * argument);
 void StartUartTask(void const * argument);
 void StartModBusTask(void const * argument);
+void StartSonarTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -136,9 +137,12 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(UART, StartUartTask, osPriorityBelowNormal, 0, 128);
   uartTaskHandle = osThreadCreate(osThread(UART), NULL);
   
-  osThreadDef(MODBUS, StartModBusTask, osPriorityHigh, 0, 512);
+  osThreadDef(MODBUS, StartModBusTask, osPriorityNormal, 0, 512);
   modbusTaskHandle = osThreadCreate(osThread(MODBUS), NULL);
   osThreadSuspend(modbusTaskHandle);
+
+  osThreadDef(SONAR, StartSonarTask, osPriorityHigh, 0, 128);
+  modbusTaskHandle = osThreadCreate(osThread(SONAR), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -171,7 +175,6 @@ void StartADCTask(void const * argument)
   time.Minutes = (uint8_t)8;
   time.Seconds = (uint8_t)9;
   
-  // set default date and time
   HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
   HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
    
@@ -222,12 +225,14 @@ void StartADCTask(void const * argument)
 }
 
 /* USER CODE BEGIN Application */
+/***************************************************************************
+Task description: ...
+***************************************************************************/
 void StartBTNTask(void const * argument)
 {
   uint32_t tikcs;
   char sFooter[31] = "Press BTN to switch | Load 00%";
 
-  /* Infinite loop */
   for(;;)
   {
     osDelay(50);
@@ -267,12 +272,13 @@ void StartBTNTask(void const * argument)
     sFooter[30] = 0;
     LCD_LOG_SetFooter((uint8_t *)sFooter);
   }
-  /* USER CODE END StartADCTask */
 }
 
+/***************************************************************************
+Task description: ...
+***************************************************************************/
 void StartUartTask(void const * argument)
 {
-  /* Infinite loop */
   for(;;)
   {
     osDelay(1000);
@@ -280,7 +286,6 @@ void StartUartTask(void const * argument)
     strcat(sDateTemp,"\r");
     BSP_COM_Transmit(COM1, sDateTemp);
   }
-  /* USER CODE END StartADCTask */
 }
 
 /* ----------------------- Platform includes --------------------------------*/
@@ -300,6 +305,9 @@ static USHORT   usRegInputBuf[REG_INPUT_NREGS];
 static USHORT   usRegHoldingStart = REG_HOLDING_START;
 static USHORT   usRegHoldingBuf[REG_HOLDING_NREGS];
 
+/***************************************************************************
+Task description: ...
+***************************************************************************/
 void StartModBusTask(void const * argument)
 {
   eMBErrorCode eStatus;
@@ -326,7 +334,7 @@ void StartModBusTask(void const * argument)
     /* The constant value. */
     usRegInputBuf[3] = 33;
     
-    osDelay(20);
+    osDelay(1);
   }
 }
 
@@ -367,6 +375,32 @@ eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs, eMBRegi
         iRegIndex++;
         usNRegs--;
       }
+
+      /***************************************************************************
+      Update current register values with new values from the protocol stack.
+      Modbus Poll -> Alt+F8 -> ID = 1, Adress = 0, Quantity = 7
+      000 = year (17)
+      001 = month (8)
+      002 = day (29)
+      003 = weekday (2)
+      004 = hour (21)
+      005 = minute (00)
+      006 = second (00)
+      -> Press 'send' to set time 21:00:00 and date 2017/08/29
+      -> check user logs on the LCD for new date and time 
+      ***************************************************************************/
+      iRegIndex = ( int )( usAddress - usRegHoldingStart );
+      
+      date.Year    = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      date.Month   = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      date.Date    = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      date.WeekDay = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      time.Hours   = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      time.Minutes = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      time.Seconds = (uint8_t)(usRegHoldingBuf[iRegIndex++]);
+      
+      HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
+      HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
     }
   }
   else
@@ -393,6 +427,61 @@ eMBErrorCode
 eMBRegDiscreteCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNDiscrete )
 {
     return MB_ENOREG;
+}
+
+/***************************************************************************
+Task description: sonar type - hc-sr04
+***************************************************************************/
+void StartSonarTask(void const * argument)
+{
+  uint32_t distance = 0;
+
+  // TODO:
+  // setup ECHO -> GPIO_MODE_EXTI
+  // setup TRIG -> GPIO_MODE_OUTPUT_PP
+  // setup TIMx with 1us tick
+  for(;;)
+  {
+    osDelay(333); // 3 times per sec
+
+    // // start TRIG
+    // HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_SET); 
+    // //w8 10 us
+    // HAL_GPIO_WritePin(TRIG_PORT, TRIG_PIN, GPIO_PIN_RESET);
+
+    // //w8 ECHO -> TIM start -> TIM stop -> calc 
+    // distance = (TIM->CNT) / 58;
+
+    // if (distance < 50) {
+    //   BSP_LED_Off(1);
+    //   BSP_LED_Off(2);
+    //   BSP_LED_Off(3);
+    //   BSP_LED_Off(4);
+    // } else if (distance < 100) {
+    //   BSP_LED_On(1);
+    //   BSP_LED_Off(2);
+    //   BSP_LED_Off(3);
+    //   BSP_LED_Off(4);
+    //  } else if (distance < 150) {
+    //   BSP_LED_On(1);
+    //   BSP_LED_On(2);
+    //   BSP_LED_Off(3);
+    //   BSP_LED_Off(4);
+    //  } else if (distance < 200) {
+    //   BSP_LED_On(1);
+    //   BSP_LED_On(2);
+    //   BSP_LED_On(3);
+    //   BSP_LED_Off(4);
+    //  } else {
+    //   BSP_LED_On(1);
+    //   BSP_LED_On(2);
+    //   BSP_LED_On(3);
+    //   BSP_LED_On(4);
+    // }
+
+    // user logs on LCD
+    LCD_UsrLog("Distance = %u cm\n",distance);
+  }
 }
 
 /* USER CODE END Application */
